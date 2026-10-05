@@ -7,7 +7,7 @@ export const authAPI = {
     password: string; role: string; city: string; area: string;
   }) => apiClient.post('/auth/register', data),
 
-  login: (data: { email: string; password: string }) =>
+  login: (data: { email: string; password: string; role?: string }) =>
     apiClient.post('/auth/login', data),
 
   getMe: () => apiClient.get('/auth/me'),

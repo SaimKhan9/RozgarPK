@@ -17,7 +17,7 @@ interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, role?: 'client' | 'worker') => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   updateProfile: (data: ProfileUpdateData) => Promise<void>;
   logout: () => void;
@@ -99,16 +99,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const response = await authAPI.login({ email, password });
-    const { user: userData, token: jwt } = response.data.data;
+  const login = async (email: string, password: string, role?: 'client' | 'worker') => {
+    try {
+      const response = await authAPI.login({ email, password, role });
+      const { user: userData, token: jwt } = response.data.data;
 
-    localStorage.setItem('rozgar_token', jwt);
-    localStorage.setItem('rozgar_user', JSON.stringify(userData));
+      localStorage.setItem('rozgar_token', jwt);
+      localStorage.setItem('rozgar_user', JSON.stringify(userData));
 
-    setToken(jwt);
-    setUser(userData);
-    connectSocket(jwt);
+      setToken(jwt);
+      setUser(userData);
+      connectSocket(jwt);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Login failed';
+      throw new Error(msg);
+    }
   };
 
   const register = async (data: RegisterData) => {

@@ -89,7 +89,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body as LoginBody;
+    const { email, password, role } = req.body as LoginBody;
 
     if (!email || !password) {
       sendError(res, 'Please provide email and password', 400);
@@ -118,6 +118,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const isMatch = await bcrypt.compare(String(password), userRecord.password_hash);
     if (!isMatch) {
       sendError(res, 'Invalid email or password', 401);
+      return;
+    }
+
+    // Role verification: ensure user logs in with their registered role
+    if (role && userRecord.role !== role) {
+      const properRole = userRecord.role === 'client' ? 'Client' : 'Worker';
+      sendError(res, `This account is registered as a ${properRole}. Please select the "${properRole}" tab to login.`, 403);
       return;
     }
 

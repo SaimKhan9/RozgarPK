@@ -22,7 +22,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !window.location.pathname.includes('/login')) {
       localStorage.removeItem('rozgar_token');
       localStorage.removeItem('rozgar_user');
       window.location.href = '/login';

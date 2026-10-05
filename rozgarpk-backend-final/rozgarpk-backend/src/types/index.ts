@@ -41,6 +41,7 @@ export interface RegisterBody {
 export interface LoginBody {
   email: string;
   password: string;
+  role?: UserRole;
 }
 
 export interface WorkerProfileBody {

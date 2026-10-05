@@ -17,7 +17,7 @@ export default function Login({ showToast }: Props) {
     if (!email || !password) { setError('Please fill in all fields'); return; }
     setIsLoading(true); setError('');
     try {
-      await login(email, password);
+      await login(email, password, role);
       showToast('✅ Login successful! Welcome back.');
       navigate('/dashboard');
     } catch (err: unknown) {
