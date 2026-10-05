@@ -55,7 +55,7 @@ export default function App() {
           <Route path="/post" element={<Navigate to="/post-job" replace />} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-          <Route path="/worker/setup" element={<ProtectedRoute><WorkerSetup /></ProtectedRoute>} />
+          <Route path="/worker/setup" element={<ProtectedRoute><WorkerSetup showToast={showToast} /></ProtectedRoute>} />
 
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />

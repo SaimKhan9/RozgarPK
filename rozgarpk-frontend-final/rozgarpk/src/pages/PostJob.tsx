@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { CATEGORIES, SUBCATEGORIES, CITIES } from '../data/mockData';
 import { jobsAPI, uploadAPI } from '../api/services';
 import { useAuth } from '../context/AuthContext';
@@ -12,16 +12,28 @@ const durMap: Record<string,string> = { '1 Day':'1day','1 Week':'1week','1 Month
 
 export default function PostJob({ showToast }: Props) {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const [category, setCategory] = useState<Category>('home-services');
+  const [searchParams] = useSearchParams();
+  const { user, isAuthenticated } = useAuth();
+  const initialCategory = (searchParams.get('category') as Category) || 'home-services';
+  const [category, setCategory] = useState<Category>(
+    CATEGORIES.some(c => c.id === initialCategory) ? initialCategory : 'home-services'
+  );
   const [duration, setDuration] = useState('1 Day');
   const [paymentType, setPaymentType] = useState('Fixed');
   const [isUrgent, setIsUrgent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', budget: '', budgetMax: '', city: 'Islamabad', area: '', subCategory: '' });
+  const [form, setForm] = useState({ title: '', description: '', budget: '', budgetMax: '', city: user?.city || 'Islamabad', area: user?.area || '', subCategory: '' });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    const catParam = searchParams.get('category') as Category;
+    if (catParam && CATEGORIES.some(c => c.id === catParam)) {
+      setCategory(catParam);
+    }
+  }, [searchParams]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -38,23 +50,39 @@ export default function PostJob({ showToast }: Props) {
 
   const handleSubmit = async () => {
     if (!isAuthenticated) { showToast('⚠️ Please login first'); navigate('/login'); return; }
-    if (!form.title || !form.description || !form.budget) { showToast('⚠️ Please fill all required fields'); return; }
+    if (user?.role === 'worker') {
+      setError('Only clients can post jobs. Please switch to a Client account.');
+      showToast('⚠️ Only Client accounts can post jobs.');
+      return;
+    }
+    if (!form.title || !form.description || !form.budget) {
+      setError('Please fill in title, description, and budget');
+      showToast('⚠️ Please fill all required fields');
+      return;
+    }
     setIsLoading(true);
+    setError('');
     try {
       await jobsAPI.create({
-        title: form.title, description: form.description,
-        category, subCategory: form.subCategory || SUBCATEGORIES[category][0],
-        budget: parseFloat(form.budget), budgetMax: form.budgetMax ? parseFloat(form.budgetMax) : undefined,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        category,
+        subCategory: form.subCategory || SUBCATEGORIES[category][0],
+        budget: parseFloat(form.budget),
+        budgetMax: form.budgetMax ? parseFloat(form.budgetMax) : undefined,
         paymentType: paymentType.toLowerCase().replace(' ', '-'),
         duration: durMap[duration] || '1day',
-        city: form.city, area: form.area, isUrgent,
+        city: form.city,
+        area: form.area,
+        isUrgent,
+        imageUrl: imageUrl || undefined,
       });
-      showToast('✅ Job posted! Workers will send proposals.');
+      showToast('✅ Job posted successfully! Workers will send proposals.');
       navigate('/dashboard');
-    } catch {
-      // If API not connected, simulate success
-      showToast('✅ Job posted! (Demo mode)');
-      navigate('/dashboard');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to post job. Please try again.';
+      setError(msg);
+      showToast(`❌ ${msg}`);
     } finally { setIsLoading(false); }
   };
 
@@ -64,6 +92,24 @@ export default function PostJob({ showToast }: Props) {
         <h2 style={{ fontSize: 24, fontWeight: 800, color: 'var(--ink)', letterSpacing: -0.5, marginBottom: 6 }}>Post a New Job</h2>
         <p style={{ fontSize: 14, color: 'var(--ink-soft)' }}>Describe your task — qualified workers will send you proposals.</p>
       </div>
+
+      {user?.role === 'worker' && (
+        <div style={{ background: '#FFFBEB', border: '1.5px solid #FCD34D', borderRadius: 10, padding: '16px 20px', marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span style={{ fontSize: 24 }}>👷</span>
+          <div>
+            <div style={{ fontWeight: 700, color: '#92400E', fontSize: 14 }}>You are signed in with a Worker account</div>
+            <div style={{ color: '#B45309', fontSize: 13, marginTop: 2 }}>
+              Only Client accounts can post jobs. <Link to="/register" style={{ fontWeight: 600, textDecoration: 'underline' }}>Register as a Client</Link> or log in with your client account to post a job.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '14px 18px', marginBottom: 24, color: '#991B1B', fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span>❌</span> {error}
+        </div>
+      )}
 
       <div className="card" style={{ overflow: 'hidden' }}>
         {/* Job Details */}

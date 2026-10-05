@@ -197,7 +197,47 @@ export default function Dashboard({ showToast }: Props) {
             </form>
           </div>
         ) : <>
-        <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', letterSpacing: -0.4, marginBottom: 24 }}>Dashboard</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', letterSpacing: -0.4, marginBottom: 20 }}>Dashboard</h2>
+
+        {/* Worker — complete profile banner */}
+        {user?.role === 'worker' && proposals.length === 0 && (
+          <div style={{
+            background: 'linear-gradient(135deg, #166534, #15803D)',
+            borderRadius: 12, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 18,
+          }}>
+            <div style={{ fontSize: 36 }}>👷</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: 'white', marginBottom: 4 }}>
+                Complete Your Worker Profile
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
+                Set up your skills, rates and location so clients can find and hire you directly.
+              </div>
+            </div>
+            <a href="/worker/setup" style={{ whiteSpace: 'nowrap', padding: '10px 20px', borderRadius: 8, background: 'white', color: 'var(--green)', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+              Set Up Profile →
+            </a>
+          </div>
+        )}
+
+        {/* Client — post job shortcut */}
+        {user?.role === 'client' && jobs.length === 0 && (
+          <div style={{
+            background: 'var(--green-pale)', border: '1.5px solid var(--green)', borderRadius: 12,
+            padding: '18px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 18,
+          }}>
+            <div style={{ fontSize: 36 }}>📋</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--green)', marginBottom: 3 }}>Post Your First Job</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+                Describe what you need and receive proposals from verified workers in your city.
+              </div>
+            </div>
+            <a href="/post-job" style={{ whiteSpace: 'nowrap', padding: '10px 20px', borderRadius: 8, background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+              Post a Job →
+            </a>
+          </div>
+        )}
 
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px,1fr))', gap: 14, marginBottom: 28 }}>

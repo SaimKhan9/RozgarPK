@@ -81,11 +81,11 @@ export const createJob = async (req: AuthRequest, res: Response): Promise<void> 
     const {
       title, description, category, subCategory,
       budget, budgetMax, paymentType, duration,
-      city, area, isUrgent,
+      city, area, isUrgent, imageUrl,
     } = req.body as CreateJobBody;
 
     if (!req.user || req.user.role !== 'client') {
-      sendError(res, 'Only clients can post jobs', 403);
+      sendError(res, 'Only clients can post jobs. If you are registered as a worker, please switch to a client account.', 403);
       return;
     }
 
@@ -96,12 +96,12 @@ export const createJob = async (req: AuthRequest, res: Response): Promise<void> 
 
     const result = await query(
       `INSERT INTO jobs (client_id, title, description, category, sub_category, budget, budget_max,
-                         payment_type, duration, city, area, is_urgent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                         payment_type, duration, city, area, is_urgent, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *, (SELECT name FROM users WHERE id = client_id) AS client_name`,
       [req.user.userId, String(title).trim(), String(description).trim(), category, subCategory || 'General',
         Number(budget), budgetMax ? Number(budgetMax) : null, paymentType || 'fixed', duration || '1day',
-        city || 'Islamabad', area || '', Boolean(isUrgent)]
+        city || 'Islamabad', area || '', Boolean(isUrgent), imageUrl || '']
     );
     sendSuccess(res, mapJob(result.rows[0]), 'Job posted successfully', 201);
   } catch (error) {

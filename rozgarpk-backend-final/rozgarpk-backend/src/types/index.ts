@@ -70,6 +70,7 @@ export interface CreateJobBody {
   city: string;
   area: string;
   isUrgent: boolean;
+  imageUrl?: string;
 }
 
 export interface CreateProposalBody {

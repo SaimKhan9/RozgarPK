@@ -106,7 +106,8 @@ export const createWorkerProfile = async (req: AuthRequest, res: Response): Prom
     const {
       category, subCategory, skills, ratePerDay, ratePerHour,
       ratePerMonth, experience, bio, licenseType, hasOwnVehicle, vehicleModel,
-    } = req.body as WorkerProfileBody;
+      city, area,
+    } = req.body as WorkerProfileBody & { city?: string; area?: string };
 
     if (!category || !ratePerDay) {
       sendError(res, 'Category and rate per day are required', 400);
@@ -114,6 +115,14 @@ export const createWorkerProfile = async (req: AuthRequest, res: Response): Prom
     }
 
     const userId = req.user.userId;
+
+    if (city || area) {
+      await query(
+        `UPDATE users SET city = COALESCE($1, city), area = COALESCE($2, area), updated_at = NOW() WHERE id = $3`,
+        [city || null, area || null, userId]
+      );
+    }
+
     const result = await query(
       `INSERT INTO worker_profiles
         (user_id, category, sub_category, skills, rate_per_day, rate_per_hour, rate_per_month,

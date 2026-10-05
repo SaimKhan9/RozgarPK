@@ -52,7 +52,7 @@ export const jobsAPI = {
     title: string; description: string; category: string;
     subCategory?: string; budget: number; budgetMax?: number;
     paymentType: string; duration: string; city: string;
-    area: string; isUrgent: boolean;
+    area: string; isUrgent: boolean; imageUrl?: string;
   }) => apiClient.post('/jobs', data),
 
   update: (id: string, data: Partial<{
