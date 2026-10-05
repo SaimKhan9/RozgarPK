@@ -112,13 +112,30 @@ export default function Browse({ showToast }: Props) {
               {tab === 'workers' ? filteredWorkers.length : filteredJobs.length} results
             </p>
             {tab === 'workers' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-                {filteredWorkers.map((w, i) => <WorkerCard key={w.id || i} worker={w} onHire={() => startConversation(w.id)} />)}
-              </div>
+              filteredWorkers.length === 0 ? (
+                <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--ink-soft)' }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>👷</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', marginBottom: 4 }}>No workers found</div>
+                  <div>Try changing your search filters or select a different category/city.</div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                  {filteredWorkers.map((w, i) => <WorkerCard key={w.id || i} worker={w} onHire={() => startConversation(w.id)} />)}
+                </div>
+              )
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-                {filteredJobs.map((j, i) => <JobCard key={j.id || i} job={j} onApply={() => startConversation(j.clientId, j.id)} />)}
-              </div>
+              filteredJobs.length === 0 ? (
+                <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--ink-soft)' }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', marginBottom: 4 }}>No jobs found</div>
+                  <div>Be the first to post a job in this category!</div>
+                  <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={() => navigate('/post-job')}>Post a Job</button>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+                  {filteredJobs.map((j, i) => <JobCard key={j.id || i} job={j} onApply={() => startConversation(j.clientId, j.id)} />)}
+                </div>
+              )
             )}
           </>
         )}

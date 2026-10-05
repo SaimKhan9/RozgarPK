@@ -15,11 +15,12 @@ export default function Driver({ showToast }: Props) {
   const [purpose, setPurpose]       = useState('🏠 Daily Routine');
   const [payment, setPayment]       = useState('💰 Per Day');
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const startConversation = async (targetUserId: string) => {
     try {
       const res = await chatAPI.startRoom({ targetUserId });
-      navigate('/chat', { state: { roomId: res.data.data.id } });
+      navigate('/chat', { state: { roomId: res.data?.data?.id } });
     } catch {
       showToast('Please sign in with a client account to message this driver.');
     }
@@ -27,6 +28,7 @@ export default function Driver({ showToast }: Props) {
 
   useEffect(() => {
     const loadDrivers = async () => {
+      setIsLoading(true);
       try {
         const res = await workersAPI.getAll({ category: 'driver' });
         const list = Array.isArray(res.data?.data)
@@ -35,6 +37,8 @@ export default function Driver({ showToast }: Props) {
         setDrivers(list);
       } catch {
         setDrivers([]);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -104,28 +108,20 @@ export default function Driver({ showToast }: Props) {
           ))}
         </div>
 
-        {/* Budget + City */}
-        <div className="form-row" style={{ marginBottom: 16 }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Your Budget (Rs.)</label>
-            <input type="number" className="form-input" placeholder="e.g. 2500" />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">City</label>
-            <select className="form-select">
-              {['Islamabad','Karachi','Lahore','Rawalpindi','Peshawar'].map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-primary btn-lg" style={{ flex: 2 }}
-            onClick={() => showToast('✅ Driver job posted! Drivers will send proposals.')}>
-            🚘 Find a Driver
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button
+            className="btn btn-primary btn-lg"
+            style={{ flex: 2 }}
+            onClick={() => navigate('/post-job?category=driver')}
+          >
+            🚘 Post a Driver Job
           </button>
-          <button className="btn btn-ghost btn-lg" style={{ flex: 1 }}
-            onClick={() => showToast('🔍 Searching available drivers...')}>
-            Browse Drivers
+          <button
+            className="btn btn-ghost btn-lg"
+            style={{ flex: 1 }}
+            onClick={() => navigate('/browse?category=driver')}
+          >
+            Browse All Drivers
           </button>
         </div>
       </div>
@@ -135,65 +131,103 @@ export default function Driver({ showToast }: Props) {
         Available Drivers ({drivers.length})
       </h3>
 
-      {drivers.length === 0 ? (
-        <div className="card" style={{ padding: 20, color: 'var(--ink-soft)' }}>No drivers are available right now. Post a job to receive proposals from drivers.</div>
+      {isLoading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--ink-soft)' }}>
+          ⏳ Loading drivers...
+        </div>
+      ) : drivers.length === 0 ? (
+        <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--ink-soft)' }}>
+          <p style={{ marginBottom: 12 }}>No drivers registered yet.</p>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/post-job?category=driver')}>
+            Post a Driver Requirement
+          </button>
+        </div>
       ) : (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px,1fr))', gap: 16 }}>
-        {drivers.map((d, i) => {
-          const profile = d.profile || {};
-          const rates = [
-            ['Per Day', `Rs. ${Number(profile.ratePerDay || 0).toLocaleString()}`],
-            ['Monthly', `Rs. ${Number(profile.ratePerMonth || 0).toLocaleString()}`],
-          ];
-          const badge = profile.hasOwnVehicle ? '🚗 Own Car' : '👤 Driver Only';
-          return (
-          <div key={i} className="card" style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 12,
-                  background: 'linear-gradient(135deg,var(--green),var(--green-light))',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0,
-                }}>{d.avatar || '🧑‍✈️'}</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{d.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 4 }}>{profile.subCategory || 'Professional Driver'}</div>
-                  <div className="stars">{'★'.repeat(Math.round(profile.rating || 5))}<span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 4 }}>({profile.totalReviews || 0})</span></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px,1fr))', gap: 16 }}>
+          {drivers.map((d, i) => {
+            const profile = d.profile || {};
+            const rates = [
+              ['Per Day', `Rs. ${Number(profile.ratePerDay || 0).toLocaleString()}`],
+              ...(profile.ratePerMonth ? [['Monthly', `Rs. ${Number(profile.ratePerMonth).toLocaleString()}`]] : []),
+            ];
+            const badge = profile.hasOwnVehicle ? '🚗 Own Car' : '👤 Driver Only';
+            return (
+              <div
+                key={d.id || i}
+                className="card"
+                style={{ padding: 20, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+                onClick={() => navigate(`/worker/${d.id}`)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 12,
+                      background: 'linear-gradient(135deg,var(--green),var(--green-light))',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0,
+                      overflow: 'hidden', color: 'white', fontWeight: 800
+                    }}>
+                      {d.avatar && (d.avatar.startsWith('http') || d.avatar.startsWith('data:')) ? (
+                        <img src={d.avatar} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        d.avatar || d.name?.charAt(0).toUpperCase() || '🧑‍✈️'
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{d.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 4 }}>{profile.subCategory || 'Professional Driver'}</div>
+                      <div className="stars">
+                        {'★'.repeat(Math.round(profile.rating || 5))}
+                        <span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 4 }}>({profile.totalReviews || 0})</span>
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: profile.hasOwnVehicle ? 'var(--green-pale)' : 'var(--amber-light)', color: profile.hasOwnVehicle ? 'var(--green)' : '#92400E', whiteSpace: 'nowrap' }}>
+                    {badge}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                  {(profile.skills || ['Driver']).slice(0, 3).map((t: string) => (
+                    <span key={t} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink-mid)' }}>{t}</span>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                  📍 {d.city || 'Pakistan'} {d.area ? `· ${d.area}` : ''} {profile.experience ? `· ${profile.experience} yrs` : ''}
+                </div>
+
+                <div style={{ background: 'var(--surface)', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                  {rates.map(([label, val]) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                      <span style={{ color: 'var(--ink-mid)' }}>{label}:</span>
+                      <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1.5px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>
+                      Rs. {Number(profile.ratePerDay || 0).toLocaleString()}/day
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                      {profile.hasOwnVehicle ? 'Fuel charged separately' : 'Will use your car'}
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-amber btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startConversation(d.id);
+                    }}
+                  >
+                    Message
+                  </button>
                 </div>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: profile.hasOwnVehicle ? 'var(--green-pale)' : 'var(--amber-light)', color: profile.hasOwnVehicle ? 'var(--green)' : '#92400E', whiteSpace: 'nowrap' }}>
-                {badge}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-              {(profile.skills || ['Driver']).slice(0, 3).map((t: string) => (
-                <span key={t} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink-mid)' }}>{t}</span>
-              ))}
-            </div>
-
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>📍 {d.city} · {d.area || 'Local Area'} · {profile.experience || 0} yrs</div>
-
-            <div style={{ background: 'var(--surface)', borderRadius: 8, padding: 10, marginBottom: 12 }}>
-              {rates.map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
-                  <span style={{ color: 'var(--ink-mid)' }}>{label}:</span>
-                  <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{val}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1.5px solid var(--border)' }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>Rs. {Number(profile.ratePerDay || 0).toLocaleString()}/day</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{profile.hasOwnVehicle ? 'Fuel charged separately' : 'Will use your car'}</div>
-              </div>
-              <button className="btn btn-amber btn-sm" onClick={() => startConversation(d.id)}>Message</button>
-            </div>
-          </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

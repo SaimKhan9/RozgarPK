@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { workersAPI, chatAPI } from '../api/services';
 
 interface Props { showToast: (msg: string) => void; }
 
@@ -25,41 +26,6 @@ const rateRows = [
   { type: '🏗️ General Labour',  skilled: '—',               helper: 'Rs. 1,000–1,200',  note: 'Any general work'    },
 ];
 
-const workers = [
-  { avatar:'🧱', name:'Shahid — Mason',      skill:'Mason & Construction', rating:4.9, reviews:73,
-    badge:'🧱 Mason', badgeBg:'var(--green-pale)', badgeColor:'var(--green)',
-    tags:['Brick Work','Plaster','Block Wall','Team: 4 people'],
-    loc:'G-13, Islamabad · 10 yrs',
-    rates:[['Mason (Per Day)','Rs. 2,200'],['Helper (Per Day)','Rs. 1,300'],['Team of 4 (Per Day)','Rs. 7,000']],
-    tip:'💡 Team available — Mason + 3 helpers. Ideal for large projects.', tipBg:'#fff8e1',
-    rateMain:'Rs. 2,200/day', rateSub:'Materials separate',
-  },
-  { avatar:'🪟', name:'Naveed — Tile Worker', skill:'Tile & Marble Work', rating:4.2, reviews:49,
-    badge:'🪟 Tile Worker', badgeBg:'var(--amber-light)', badgeColor:'#92400E',
-    tags:['Floor Tiles','Wall Tiles','Marble','Bathroom'],
-    loc:'Lahore · 7 yrs',
-    rates:[['Per Day','Rs. 3,500'],['Per Sq. Ft (Floor)','Rs. 35–45'],['Full Bathroom','Rs. 8,000–12,000']],
-    tip:'', tipBg:'',
-    rateMain:'Rs. 3,500/day', rateSub:'Or per sq. ft',
-  },
-  { avatar:'🪣', name:'Zafar — Plaster',      skill:'Plaster & POP Work', rating:4.9, reviews:58,
-    badge:'🪣 Plaster', badgeBg:'var(--green-pale)', badgeColor:'var(--green)',
-    tags:['Wall Plaster','POP Ceiling','Putty','Texture'],
-    loc:'Rawalpindi · 9 yrs',
-    rates:[['Per Day','Rs. 2,800'],['Per Sq. Ft','Rs. 20–30'],['1 Room (Complete)','Rs. 4,000–6,000']],
-    tip:'', tipBg:'',
-    rateMain:'Rs. 2,800/day', rateSub:'Helper separate',
-  },
-  { avatar:'🏗️', name:'Munir — Contractor',   skill:'Labour Contractor', rating:4.3, reviews:34,
-    badge:'🏗️ Contractor', badgeBg:'var(--purple-pale)', badgeColor:'var(--purple)',
-    tags:['5–20 Workers','Roof Slab','Foundation','Site Work'],
-    loc:'Islamabad · 15 yrs',
-    rates:[['Per Worker / Day','Rs. 1,100'],['5 Workers / Day','Rs. 5,500'],['10 Workers / Day','Rs. 10,000']],
-    tip:'💡 Contractor — Sends full teams for large construction projects.', tipBg:'var(--purple-pale)',
-    rateMain:'Rs. 1,100/worker', rateSub:'Min 5 workers',
-  },
-];
-
 export default function Labour({ showToast }: Props) {
   const navigate = useNavigate();
   const [workType,    setWorkType]    = useState('Mason');
@@ -67,6 +33,36 @@ export default function Labour({ showToast }: Props) {
   const [duration,    setDuration]    = useState('1 Day');
   const [payment,     setPayment]     = useState('💰 Per Worker / Day');
   const [material,    setMaterial]    = useState('🏠 I (Client) Will Provide');
+  const [workers,     setWorkers]     = useState<any[]>([]);
+  const [isLoading,   setIsLoading]   = useState(true);
+
+  const startConversation = async (targetUserId: string) => {
+    try {
+      const res = await chatAPI.startRoom({ targetUserId });
+      navigate('/chat', { state: { roomId: res.data?.data?.id } });
+    } catch {
+      showToast('Please sign in to message this worker.');
+    }
+  };
+
+  useEffect(() => {
+    const loadLabourWorkers = async () => {
+      setIsLoading(true);
+      try {
+        const res = await workersAPI.getAll({ category: 'daily-labour' });
+        const list = Array.isArray(res.data?.data)
+          ? res.data.data
+          : (res.data?.data?.workers ?? []);
+        setWorkers(list);
+      } catch {
+        setWorkers([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLabourWorkers();
+  }, []);
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px' }}>
@@ -127,49 +123,34 @@ export default function Labour({ showToast }: Props) {
 
         {/* Material */}
         <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-mid)', marginBottom: 10 }}>Who Provides Materials?</p>
-        <div className="toggle-group" style={{ marginBottom: 18 }}>
+        <div className="toggle-group" style={{ marginBottom: 24 }}>
           {materials.map(m => (
             <button key={m} className={`toggle-pill ${material === m ? 'active' : ''}`} onClick={() => setMaterial(m)}>{m}</button>
           ))}
         </div>
 
-        {/* Budget + City */}
-        <div className="form-row" style={{ marginBottom: 16 }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Budget Per Worker (Rs.)</label>
-            <input type="number" className="form-input" placeholder="e.g. 1500" />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">City</label>
-            <select className="form-select">
-              {['Islamabad','Karachi','Lahore','Rawalpindi','Peshawar'].map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button
+            className="btn btn-primary btn-full btn-lg"
+            style={{ flex: 2 }}
+            onClick={() => navigate('/post-job?category=daily-labour')}
+          >
+            👷 Post Construction Job
+          </button>
+          <button
+            className="btn btn-ghost btn-lg"
+            style={{ flex: 1 }}
+            onClick={() => navigate('/browse?category=daily-labour')}
+          >
+            Browse Workers
+          </button>
         </div>
-
-        {/* Description */}
-        <div className="form-group" style={{ marginBottom: 14 }}>
-          <label className="form-label">Describe the Work</label>
-          <textarea className="form-textarea"
-            placeholder="e.g. Need to pour roof slab for 3 rooms, single storey. I will provide all materials. Work to start at 8 AM." />
-        </div>
-
-        {/* Urgent */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 18 }}>
-          <input type="checkbox" style={{ width: 16, height: 16, accentColor: 'var(--amber)' }} />
-          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-mid)' }}>⚡ Urgent — Need workers today or tomorrow</span>
-        </label>
-
-        <button className="btn btn-primary btn-full btn-lg"
-          onClick={() => showToast('✅ Construction job posted! Workers will send proposals.')}>
-          👷 Find Workers
-        </button>
       </div>
 
       {/* Rate Guide */}
       <div className="card" style={{ padding: 22, marginBottom: 24 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', marginBottom: 16 }}>
-          📊 Market Rate Guide (Islamabad / Rawalpindi)
+          📊 Market Rate Guide (Reference Rates)
         </h3>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -196,62 +177,95 @@ export default function Labour({ showToast }: Props) {
 
       {/* Available Workers */}
       <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', marginBottom: 16 }}>
-        Available Construction Workers (42)
+        Available Construction Workers ({workers.length})
       </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
-        {workers.map((w, i) => (
-          <div key={i} className="card" style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-                  background: 'linear-gradient(135deg,var(--green),var(--green-light))',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
-                }}>{w.avatar}</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{w.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 4 }}>{w.skill}</div>
-                  <div className="stars">{'★'.repeat(Math.round(w.rating))}<span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 4 }}>({w.reviews})</span></div>
+
+      {isLoading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--ink-soft)' }}>
+          ⏳ Loading workers...
+        </div>
+      ) : workers.length === 0 ? (
+        <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--ink-soft)' }}>
+          <p style={{ marginBottom: 12 }}>No daily labour workers registered in this category yet.</p>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/post-job?category=daily-labour')}>
+            Post a Construction Job
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
+          {workers.map((w, i) => {
+            const profile = w.profile || {};
+            return (
+              <div
+                key={w.id || i}
+                className="card"
+                style={{ padding: 20, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+                onClick={() => navigate(`/worker/${w.id}`)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+                      background: 'linear-gradient(135deg,var(--green),var(--green-light))',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                      overflow: 'hidden', color: 'white', fontWeight: 800
+                    }}>
+                      {w.avatar && (w.avatar.startsWith('http') || w.avatar.startsWith('data:')) ? (
+                        <img src={w.avatar} alt={w.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        w.avatar || w.name?.charAt(0).toUpperCase() || '👷'
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{w.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 4 }}>{profile.subCategory || 'Construction Worker'}</div>
+                      <div className="stars">
+                        {'★'.repeat(Math.round(profile.rating || 5))}
+                        <span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 4 }}>({profile.totalReviews || 0})</span>
+                      </div>
+                    </div>
+                  </div>
+                  {profile.isVerified && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'var(--green-pale)', color: 'var(--green)', whiteSpace: 'nowrap' }}>
+                      ✓ Verified
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                  {(profile.skills || []).slice(0, 4).map((t: string) => (
+                    <span key={t} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink-mid)' }}>{t}</span>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                  📍 {w.area ? `${w.area}, ` : ''}{w.city || 'Pakistan'} {profile.experience ? `· ${profile.experience} yrs` : ''}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1.5px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>
+                      Rs. {Number(profile.ratePerDay || 0).toLocaleString()}/day
+                    </div>
+                    {profile.ratePerHour && (
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Rs. {profile.ratePerHour}/hour</div>
+                    )}
+                  </div>
+                  <button
+                    className="btn btn-amber btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startConversation(w.id);
+                    }}
+                  >
+                    Contact
+                  </button>
                 </div>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: w.badgeBg, color: w.badgeColor, whiteSpace: 'nowrap' }}>
-                {w.badge}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-              {w.tags.map(t => (
-                <span key={t} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink-mid)' }}>{t}</span>
-              ))}
-            </div>
-
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 }}>📍 {w.loc}</div>
-
-            <div style={{ background: 'var(--surface)', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-              {w.rates.map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
-                  <span style={{ color: 'var(--ink-mid)' }}>{label}:</span>
-                  <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{val}</span>
-                </div>
-              ))}
-            </div>
-
-            {w.tip && (
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)', background: w.tipBg, borderRadius: 6, padding: 8, marginBottom: 10 }}>
-                {w.tip}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1.5px solid var(--border)' }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{w.rateMain}</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{w.rateSub}</div>
-              </div>
-              <button className="btn btn-amber btn-sm" onClick={() => navigate('/chat')}>Hire Now</button>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
