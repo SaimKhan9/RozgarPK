@@ -13,16 +13,29 @@ const caCertificate = process.env.DATABASE_CA_CERT || (
 );
 
 let poolConnectionString = connectionString;
-if (connectionString && caCertificate) {
-  const parsedUrl = new URL(connectionString);
-  parsedUrl.searchParams.delete('sslmode');
-  parsedUrl.searchParams.delete('sslrootcert');
-  poolConnectionString = parsedUrl.toString();
+let sslOptions: boolean | { ca?: string; rejectUnauthorized: boolean } = false;
+
+if (connectionString) {
+  try {
+    const parsedUrl = new URL(connectionString);
+    const hasSsl = parsedUrl.searchParams.get('sslmode') || parsedUrl.searchParams.get('ssl');
+    parsedUrl.searchParams.delete('sslmode');
+    parsedUrl.searchParams.delete('sslrootcert');
+    poolConnectionString = parsedUrl.toString();
+
+    if (caCertificate) {
+      sslOptions = { ca: caCertificate, rejectUnauthorized: true };
+    } else if (hasSsl || process.env.NODE_ENV === 'production' || connectionString.includes('aivencloud.com')) {
+      sslOptions = { rejectUnauthorized: false };
+    }
+  } catch (e) {
+    console.error('Failed to parse DATABASE_URL:', e);
+  }
 }
 
 const pool = new Pool(connectionString ? {
   connectionString: poolConnectionString,
-  ...(caCertificate ? { ssl: { ca: caCertificate, rejectUnauthorized: true } } : {}),
+  ...(sslOptions ? { ssl: sslOptions } : {}),
   max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
@@ -41,9 +54,8 @@ pool.on('connect', () => {
   console.log('✅ Connected to PostgreSQL database');
 });
 
-pool.on('error', (err) => {
-  console.error('❌ Database connection error:', err.message);
-  process.exit(1);
+pool.on('error', (err: Error) => {
+  console.error('❌ Database pool error:', err.message);
 });
 
 export default pool;
