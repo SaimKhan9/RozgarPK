@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: rozgarpk-api
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DB_HOST
+        fromDatabase:
+          name: rozgarpk-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: rozgarpk-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: rozgarpk-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: rozgarpk-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: rozgarpk-db
+          property: password
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        value: https://your-frontend.vercel.app
+
+databases:
+  - name: rozgarpk-db
+    databaseName: rozgarpk
+    user: rozgarpk

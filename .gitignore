@@ -1,0 +1,21 @@
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/coverage/
+
+# Local secrets and Aiven certificate
+**/.env
+**/.env.*
+!**/.env.example
+**/aiven-ca.pem
+**/*.pem
+
+# Local account data and logs
+**/src/data/store.json
+**/*.log
+
+# Editor and OS files
+**/.vscode/
+**/.idea/
+**/.DS_Store
+**/Thumbs.db
