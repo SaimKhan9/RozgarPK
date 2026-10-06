@@ -11,6 +11,18 @@ export default function Home({ showToast }: Props) {
   const navigate = useNavigate();
   const [featuredJobs, setFeaturedJobs] = useState<any[]>([]);
   const [featuredWorkers, setFeaturedWorkers] = useState<any[]>([]);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  const [platformStats, setPlatformStats] = useState<{
+    total_workers: number;
+    completed_jobs: number;
+    total_cities: number;
+    avg_rating: number;
+  }>({
+    total_workers: 0,
+    completed_jobs: 0,
+    total_cities: 0,
+    avg_rating: 5.0,
+  });
 
   const startConversation = async (targetUserId: string, jobId?: string) => {
     try {
@@ -24,9 +36,10 @@ export default function Home({ showToast }: Props) {
   useEffect(() => {
     const loadHighlights = async () => {
       try {
-        const [jobsRes, workersRes] = await Promise.all([
+        const [jobsRes, workersRes, countsRes] = await Promise.all([
           jobsAPI.getAll({ limit: 3 }),
           workersAPI.getAll({ limit: 3 }),
+          workersAPI.getCategoryCounts().catch(() => ({ data: { data: { categoryCounts: {}, stats: null } } })),
         ]);
 
         const jobs = Array.isArray(jobsRes.data?.data)
@@ -39,6 +52,15 @@ export default function Home({ showToast }: Props) {
 
         setFeaturedJobs(jobs.slice(0, 3));
         setFeaturedWorkers(workers.slice(0, 3));
+
+        if (countsRes.data?.data) {
+          if (countsRes.data.data.categoryCounts) {
+            setCategoryCounts(countsRes.data.data.categoryCounts);
+          }
+          if (countsRes.data.data.stats) {
+            setPlatformStats(countsRes.data.data.stats);
+          }
+        }
       } catch {
         setFeaturedJobs([]);
         setFeaturedWorkers([]);
@@ -118,16 +140,16 @@ export default function Home({ showToast }: Props) {
 
       {/* Stats */}
       <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '20px 28px' }}>
-        <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', gap: 0 }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', gap: 0, flexWrap: 'wrap' }}>
           {[
-            { num: '12,400+', label: 'Registered Workers', icon: '👷' },
-            { num: '8,200+',  label: 'Jobs Completed',     icon: '✅' },
-            { num: '340+',    label: 'Cities Covered',      icon: '🏙️' },
-            { num: '4.8 ⭐',  label: 'Average Rating',      icon: '' },
+            { num: `${platformStats.total_workers > 0 ? platformStats.total_workers : 1}`, label: 'Registered Workers', icon: '👷' },
+            { num: `${platformStats.completed_jobs}`, label: 'Jobs Completed', icon: '✅' },
+            { num: `${platformStats.total_cities > 0 ? platformStats.total_cities : 1}`, label: 'Cities Covered', icon: '🏙️' },
+            { num: `${platformStats.avg_rating || '5.0'} ⭐`, label: 'Average Rating', icon: '' },
           ].map((stat, i) => (
             <div key={i} style={{
-              flex: 1, display: 'flex', alignItems: 'center', gap: 12,
-              padding: '0 24px', borderRight: i < 3 ? '1px solid var(--border)' : 'none',
+              flex: 1, minWidth: 160, display: 'flex', alignItems: 'center', gap: 12,
+              padding: '8px 24px', borderRight: i < 3 ? '1px solid var(--border)' : 'none',
             }}>
               {stat.icon && <span style={{ fontSize: 22 }}>{stat.icon}</span>}
               <div>
@@ -146,14 +168,23 @@ export default function Home({ showToast }: Props) {
           <button className="btn btn-sm btn-ghost" onClick={() => navigate('/browse')}>View all →</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
-          {CATEGORIES.map(cat => (
-            <div key={cat.id} className="card" style={{ padding: '18px 14px', textAlign: 'center', cursor: 'pointer' }}
-              onClick={() => navigate(cat.id === 'driver' ? '/driver' : cat.id === 'daily-labour' ? '/labour' : '/browse')}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{cat.icon}</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 3 }}>{cat.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{cat.count.toLocaleString()} workers</div>
-            </div>
-          ))}
+          {CATEGORIES.map(cat => {
+            const count = categoryCounts[cat.id] || 0;
+            return (
+              <div key={cat.id} className="card" style={{ padding: '18px 14px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
+                onClick={() => navigate(cat.id === 'driver' ? '/driver' : cat.id === 'daily-labour' ? '/labour' : `/browse?category=${cat.id}`)}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>{cat.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 3 }}>{cat.label}</div>
+                <div style={{
+                  fontSize: 11,
+                  color: count > 0 ? 'var(--green)' : 'var(--ink-soft)',
+                  fontWeight: count > 0 ? 700 : 500
+                }}>
+                  {count === 1 ? '1 worker' : `${count.toLocaleString()} workers`}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

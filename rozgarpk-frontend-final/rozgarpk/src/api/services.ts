@@ -27,6 +27,8 @@ export const workersAPI = {
 
   getById: (id: string) => apiClient.get(`/workers/${id}`),
 
+  getCategoryCounts: () => apiClient.get('/workers/category-counts'),
+
   createProfile: (data: {
     category: string; subCategory: string; skills: string[];
     ratePerDay: number; ratePerHour?: number; ratePerMonth?: number;

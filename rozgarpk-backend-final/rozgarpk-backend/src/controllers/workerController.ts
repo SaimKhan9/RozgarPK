@@ -173,3 +173,44 @@ export const toggleAvailability = async (req: AuthRequest, res: Response): Promi
     sendError(res, 'Could not update availability', 500);
   }
 };
+
+export const getWorkerCategoryCounts = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await query(
+      `SELECT wp.category, COUNT(*)::int AS count
+       FROM worker_profiles wp
+       INNER JOIN users u ON u.id = wp.user_id
+       WHERE u.role = 'worker' AND u.is_active = TRUE
+       GROUP BY wp.category`
+    );
+
+    const counts: Record<string, number> = {};
+    for (const row of result.rows) {
+      if (row.category) {
+        counts[row.category] = Number(row.count);
+      }
+    }
+
+    const statsResult = await query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM users WHERE role = 'worker' AND is_active = TRUE) AS total_workers,
+         (SELECT COUNT(*)::int FROM jobs WHERE status = 'completed') AS completed_jobs,
+         (SELECT COUNT(DISTINCT city)::int FROM users WHERE city IS NOT NULL AND city <> '') AS total_cities,
+         (SELECT COALESCE(ROUND(AVG(rating)::numeric, 1), 5.0) FROM worker_profiles WHERE rating > 0) AS avg_rating`
+    );
+
+    sendSuccess(res, {
+      categoryCounts: counts,
+      stats: statsResult.rows[0] || {
+        total_workers: 0,
+        completed_jobs: 0,
+        total_cities: 0,
+        avg_rating: 5.0,
+      },
+    });
+  } catch (error) {
+    console.error('GetWorkerCategoryCounts error:', error);
+    sendError(res, 'Could not fetch worker category counts', 500);
+  }
+};
+
