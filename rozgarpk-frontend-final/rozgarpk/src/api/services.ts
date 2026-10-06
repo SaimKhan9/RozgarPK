@@ -120,3 +120,30 @@ export const uploadAPI = {
     return data.secure_url as string;
   },
 };
+
+// ─── ADMIN ─────────────────────────────────────────
+export const adminAPI = {
+  getStats: () => apiClient.get('/admin/stats'),
+  getAnalytics: () => apiClient.get('/admin/analytics'),
+  getUsers: (params?: { role?: string; search?: string; page?: number; limit?: number }) =>
+    apiClient.get('/admin/users', { params }),
+  updateUserStatus: (id: string, data: { isActive?: boolean; isVerified?: boolean; role?: string }) =>
+    apiClient.patch(`/admin/users/${id}/status`, data),
+  deleteUser: (id: string) => apiClient.delete(`/admin/users/${id}`),
+  getWorkers: (params?: { search?: string; category?: string }) =>
+    apiClient.get('/admin/workers', { params }),
+  toggleWorkerVerification: (id: string, isVerified: boolean) =>
+    apiClient.patch(`/admin/workers/${id}/verify`, { isVerified }),
+  getJobs: (params?: { status?: string; category?: string; search?: string }) =>
+    apiClient.get('/admin/jobs', { params }),
+  updateJobStatus: (id: string, status: string) =>
+    apiClient.patch(`/admin/jobs/${id}/status`, { status }),
+  deleteJob: (id: string) => apiClient.delete(`/admin/jobs/${id}`),
+  claimAdminRole: (secret: string) => apiClient.post('/admin/claim', { secret }),
+};
+
+// ─── NOTIFICATIONS ─────────────────────────────────
+export const notificationsAPI = {
+  getAll: () => apiClient.get('/notifications'),
+};
+

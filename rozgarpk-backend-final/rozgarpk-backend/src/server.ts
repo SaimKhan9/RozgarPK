@@ -4,12 +4,14 @@ import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import authRoutes     from './routes/authRoutes';
-import workerRoutes   from './routes/workerRoutes';
-import jobRoutes      from './routes/jobRoutes';
-import proposalRoutes from './routes/proposalRoutes';
-import chatRoutes     from './routes/chatRoutes';
-import reviewRoutes   from './routes/reviewRoutes';
+import authRoutes         from './routes/authRoutes';
+import workerRoutes       from './routes/workerRoutes';
+import jobRoutes          from './routes/jobRoutes';
+import proposalRoutes     from './routes/proposalRoutes';
+import chatRoutes         from './routes/chatRoutes';
+import reviewRoutes       from './routes/reviewRoutes';
+import adminRoutes        from './routes/adminRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { verifyToken } from './utils/jwt';
 import { query } from './config/db';
@@ -189,12 +191,14 @@ app.get('/health', async (_req, res) => {
 });
 
 // ─── API Routes ─────────────────────────────────
-app.use('/api/auth',      authRoutes);
-app.use('/api/workers',   workerRoutes);
-app.use('/api/jobs',      jobRoutes);
-app.use('/api/proposals', proposalRoutes);
-app.use('/api/chat',      chatRoutes);
-app.use('/api/reviews',   reviewRoutes);
+app.use('/api/auth',          authRoutes);
+app.use('/api/workers',       workerRoutes);
+app.use('/api/jobs',          jobRoutes);
+app.use('/api/proposals',     proposalRoutes);
+app.use('/api/chat',          chatRoutes);
+app.use('/api/reviews',       reviewRoutes);
+app.use('/api/admin',         adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // ─── API Docs (quick reference) ─────────────────
 app.get('/api', (_req, res) => {

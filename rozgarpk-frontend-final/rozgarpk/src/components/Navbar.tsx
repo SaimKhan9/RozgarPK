@@ -64,7 +64,47 @@ export default function Navbar() {
 
         {isAuthenticated ? (
           <>
-            <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 8, color: 'white' }}>
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#FEF3C7',
+                  background: 'rgba(245, 158, 11, 0.25)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  textDecoration: 'none',
+                }}
+              >
+                🛡️ Admin
+              </Link>
+            )}
+
+            <Link
+              to="/notifications"
+              title="Notifications"
+              style={{
+                width: 34,
+                height: 34,
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: '50%',
+                background: pathname === '/notifications' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+                color: 'white',
+                fontSize: 16,
+                textDecoration: 'none',
+                transition: 'background 0.15s',
+              }}
+            >
+              🔔
+            </Link>
+
+            <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 6, color: 'white' }}>
               <span style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: '50%', background: '#ffffff22', fontWeight: 700 }}>
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </span>

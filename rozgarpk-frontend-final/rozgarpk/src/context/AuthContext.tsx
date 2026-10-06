@@ -11,6 +11,8 @@ interface AuthUser {
   city: string;
   area: string;
   avatarUrl?: string;
+  isVerified?: boolean;
+  isActive?: boolean;
 }
 
 interface AuthContextType {
