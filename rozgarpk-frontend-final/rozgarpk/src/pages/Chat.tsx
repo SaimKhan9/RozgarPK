@@ -335,13 +335,15 @@ export default function Chat({ showToast }: Props) {
                   title="Delete conversation"
                   onClick={() => setIsDeleteChatModalOpen(true)}
                   style={{
-                    width: 36, height: 36, borderRadius: 8,
-                    border: '1.5px solid #fee2e2', background: '#fef2f2',
-                    color: '#dc2626', cursor: 'pointer', fontSize: 15,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 12px', borderRadius: 8,
+                    border: '1.5px solid #fecaca', background: '#fef2f2',
+                    color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    transition: 'all 0.15s'
                   }}
                 >
-                  🗑️
+                  <span>🗑️</span>
+                  <span>Delete Chat</span>
                 </button>
               </div>
             </div>
@@ -378,15 +380,15 @@ export default function Chat({ showToast }: Props) {
                             type="button"
                             onClick={() => setUnsendConfirmId(unsendConfirmId === msg.id ? null : msg.id)}
                             style={{
-                              background: 'transparent', border: 'none', padding: 0,
-                              color: '#9ca3af', cursor: 'pointer', fontSize: 11,
-                              transition: 'color 0.15s'
+                              background: '#fee2e2', border: '1px solid #fecaca',
+                              borderRadius: 4, padding: '1px 7px',
+                              color: '#b91c1c', cursor: 'pointer', fontSize: 11,
+                              fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3
                             }}
-                            onMouseEnter={e => (e.currentTarget.style.color = '#dc2626')}
-                            onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}
                             title="Unsend message"
                           >
-                            Unsend
+                            <span>↩️</span>
+                            <span>Unsend</span>
                           </button>
                         )}
                       </div>
