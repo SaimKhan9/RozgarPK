@@ -170,3 +170,68 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
     sendError(res, 'Could not send message', 500);
   }
 };
+
+// DELETE /api/chat/rooms/:roomId — Delete an entire chat room and all its messages
+export const deleteChatRoom = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { roomId } = req.params;
+    const userId = req.user!.userId;
+
+    const room = await query(
+      'SELECT id, client_id, worker_id FROM chat_rooms WHERE id = $1 AND (client_id = $2 OR worker_id = $2)',
+      [roomId, userId]
+    );
+
+    if (!room.rows[0]) {
+      sendError(res, 'Chat room not found or access denied', 404);
+      return;
+    }
+
+    const { client_id, worker_id } = room.rows[0];
+
+    // Delete chat room (PostgreSQL foreign key cascade deletes all messages)
+    await query('DELETE FROM chat_rooms WHERE id = $1', [roomId]);
+
+    // Broadcast socket event to room and participants
+    req.app.get('io')?.to(roomId).emit('chat_deleted', { roomId });
+    req.app.get('io')?.to(`user:${client_id}`).emit('chat_deleted', { roomId });
+    req.app.get('io')?.to(`user:${worker_id}`).emit('chat_deleted', { roomId });
+
+    sendSuccess(res, { roomId }, 'Conversation deleted successfully');
+  } catch (err) {
+    console.error('DeleteChatRoom error:', err);
+    sendError(res, 'Could not delete conversation', 500);
+  }
+};
+
+// DELETE /api/chat/messages/:messageId — Unsend a single message
+export const unsendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user!.userId;
+
+    const msg = await query(
+      'SELECT id, room_id FROM messages WHERE id = $1 AND sender_id = $2',
+      [messageId, userId]
+    );
+
+    if (!msg.rows[0]) {
+      sendError(res, 'Message not found or you can only unsend your own messages', 404);
+      return;
+    }
+
+    const roomId = msg.rows[0].room_id;
+
+    // Delete the message
+    await query('DELETE FROM messages WHERE id = $1', [messageId]);
+
+    // Broadcast socket event
+    req.app.get('io')?.to(roomId).emit('message_deleted', { messageId, roomId });
+
+    sendSuccess(res, { messageId, roomId }, 'Message unsent successfully');
+  } catch (err) {
+    console.error('UnsendMessage error:', err);
+    sendError(res, 'Could not unsend message', 500);
+  }
+};
+

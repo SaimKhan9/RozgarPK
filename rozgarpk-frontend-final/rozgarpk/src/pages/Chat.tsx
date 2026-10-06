@@ -18,14 +18,18 @@ export default function Chat({ showToast }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [rooms, setRooms]           = useState<ChatRoom[]>([]);
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
-  const [input, setInput]           = useState('');
-  const [isTyping, setIsTyping]     = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
+  const [rooms, setRooms]                   = useState<ChatRoom[]>([]);
+  const [activeRoomId, setActiveRoomId]     = useState<string | null>(null);
+  const [input, setInput]                   = useState('');
+  const [isTyping, setIsTyping]             = useState(false);
+  const [isLoading, setIsLoading]           = useState(true);
+  const [isSending, setIsSending]           = useState(false);
   const [isContactOptionsOpen, setIsContactOptionsOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [isDeleteChatModalOpen, setIsDeleteChatModalOpen] = useState(false);
+  const [isDeletingChat, setIsDeletingChat] = useState(false);
+  const [unsendConfirmId, setUnsendConfirmId] = useState<string | null>(null);
+  const [isUnsending, setIsUnsending]       = useState(false);
+  const [search, setSearch]                 = useState('');
   const msgsRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<number | null>(null);
   const activeRoom = rooms.find(room => room.id === activeRoomId) || null;
@@ -77,15 +81,39 @@ export default function Chat({ showToast }: Props) {
       } : room));
     };
 
+    const handleMessageDeleted = ({ messageId, roomId }: { messageId: string; roomId: string }) => {
+      setRooms(prev => prev.map(room => {
+        if (room.id !== roomId) return room;
+        const filtered = room.messages.filter(m => m.id !== messageId);
+        const last = filtered[filtered.length - 1];
+        return {
+          ...room,
+          messages: filtered,
+          lastMessage: last ? last.text : '',
+          lastMessageAt: last ? last.sentAt : room.lastMessageAt,
+        };
+      }));
+    };
+
+    const handleChatDeleted = ({ roomId }: { roomId: string }) => {
+      setRooms(prev => prev.filter(r => r.id !== roomId));
+      setActiveRoomId(prev => (prev === roomId ? null : prev));
+      showToast('This conversation was deleted.');
+    };
+
     const handleTyping = ({ isTyping: typing }: { userId: string; isTyping: boolean }) => {
       setIsTyping(typing);
     };
 
     socket.on('receive_message', handleMessage);
+    socket.on('message_deleted', handleMessageDeleted);
+    socket.on('chat_deleted', handleChatDeleted);
     socket.on('user_typing', handleTyping);
 
     return () => {
       socket.off('receive_message', handleMessage);
+      socket.off('message_deleted', handleMessageDeleted);
+      socket.off('chat_deleted', handleChatDeleted);
       socket.off('user_typing', handleTyping);
     };
   }, [activeRoomId]);
@@ -132,6 +160,55 @@ export default function Chat({ showToast }: Props) {
     }
   };
 
+  const handleUnsendMessage = async (messageId: string) => {
+    if (isUnsending) return;
+    setIsUnsending(true);
+    try {
+      await chatAPI.unsendMessage(messageId);
+      const socket = getSocket();
+      if (socket) {
+        socket.emit('unsend_message', { messageId });
+      }
+      setRooms(prev => prev.map(room => {
+        if (room.id !== activeRoomId) return room;
+        const filtered = room.messages.filter(m => m.id !== messageId);
+        const last = filtered[filtered.length - 1];
+        return {
+          ...room,
+          messages: filtered,
+          lastMessage: last ? last.text : '',
+          lastMessageAt: last ? last.sentAt : room.lastMessageAt,
+        };
+      }));
+      setUnsendConfirmId(null);
+      showToast('Message unsent.');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Could not unsend message.');
+    } finally {
+      setIsUnsending(false);
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    if (!activeRoomId || isDeletingChat) return;
+    setIsDeletingChat(true);
+    try {
+      await chatAPI.deleteRoom(activeRoomId);
+      const socket = getSocket();
+      if (socket) {
+        socket.emit('delete_room', { roomId: activeRoomId });
+      }
+      setRooms(prev => prev.filter(r => r.id !== activeRoomId));
+      setActiveRoomId(null);
+      setIsDeleteChatModalOpen(false);
+      showToast('Conversation deleted successfully.');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Could not delete conversation.');
+    } finally {
+      setIsDeletingChat(false);
+    }
+  };
+
   const filteredRooms = rooms.filter(room =>
     `${room.workerName} ${room.jobTitle} ${room.lastMessage}`.toLowerCase().includes(search.toLowerCase())
   );
@@ -151,7 +228,7 @@ export default function Chat({ showToast }: Props) {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 300px) minmax(0, 1fr)', height: 'calc(100vh - var(--nav-height))' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 320px) minmax(0, 1fr)', height: 'calc(100vh - var(--nav-height))' }}>
       {/* Sidebar */}
       <div style={{ background: 'white', borderRight: '1.5px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: 18, borderBottom: '1.5px solid var(--border)' }}>
@@ -159,12 +236,38 @@ export default function Chat({ showToast }: Props) {
           <input type="search" className="form-input" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search conversations..." style={{ fontSize: 13 }} />
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {isLoading ? <div style={{ padding: 20, color: 'var(--ink-soft)' }}>Loading conversations...</div> : filteredRooms.length === 0 ? <div style={{ padding: 20, color: 'var(--ink-soft)' }}>No conversations yet. Start one from a worker or job listing.</div> : filteredRooms.map(room => (
-            <div key={room.id} onClick={() => setActiveRoomId(room.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid var(--surface)', background: activeRoomId === room.id ? 'var(--green-pale)' : 'white', transition: 'background 0.12s' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: 'linear-gradient(135deg, var(--green), var(--green-light))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{room.workerAvatar || room.workerName.charAt(0).toUpperCase()}</div>
+          {isLoading ? (
+            <div style={{ padding: 20, color: 'var(--ink-soft)' }}>Loading conversations...</div>
+          ) : filteredRooms.length === 0 ? (
+            <div style={{ padding: 20, color: 'var(--ink-soft)' }}>No conversations yet. Start one from a worker or job listing.</div>
+          ) : filteredRooms.map(room => (
+            <div
+              key={room.id}
+              onClick={() => setActiveRoomId(room.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+                cursor: 'pointer', borderBottom: '1px solid var(--surface)',
+                background: activeRoomId === room.id ? 'var(--green-pale)' : 'white',
+                transition: 'background 0.12s'
+              }}
+            >
+              <div style={{
+                width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                background: 'linear-gradient(135deg, var(--green), var(--green-light))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+                color: 'white', fontWeight: 700, overflow: 'hidden'
+              }}>
+                {room.workerAvatar && (room.workerAvatar.startsWith('http') || room.workerAvatar.startsWith('data:')) ? (
+                  <img src={room.workerAvatar} alt={room.workerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  room.workerAvatar || room.workerName.charAt(0).toUpperCase()
+                )}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 3 }}>{room.workerName}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{room.lastMessage}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {room.lastMessage || 'No messages yet'}
+                </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 4 }}>{formatRoomTimestamp(room.lastMessageAt)}</div>
@@ -177,54 +280,295 @@ export default function Chat({ showToast }: Props) {
 
       {/* Chat main */}
       <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface)' }}>
-        {activeRoom ? <>
-        <div style={{ padding: '14px 20px', background: 'white', borderBottom: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, var(--green), var(--green-light))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{activeRoom.workerAvatar || activeRoom.workerName.charAt(0).toUpperCase()}</div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{activeRoom.workerName}</div>
-            <div style={{ fontSize: 12, color: isTyping ? 'var(--amber)' : 'var(--ink-soft)', fontWeight: 500 }}>
-              {isTyping ? 'Typing...' : activeRoom.jobTitle}
-            </div>
-          </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button type="button" title={activeRoom.otherUserPhone ? `Call or contact ${activeRoom.workerName}` : 'Phone number unavailable'} onClick={() => setIsContactOptionsOpen(true)} disabled={!activeRoom.otherUserPhone} style={{ width: 36, height: 36, borderRadius: 8, border: '1.5px solid var(--border)', background: 'white', cursor: activeRoom.otherUserPhone ? 'pointer' : 'not-allowed', opacity: activeRoom.otherUserPhone ? 1 : 0.5, fontSize: 16 }}>📞</button>
-            {activeRoom.otherUserRole === 'worker' && <button type="button" title="Open worker profile" onClick={() => navigate(`/worker/${activeRoom.otherUserId}`)} style={{ width: 36, height: 36, borderRadius: 8, border: '1.5px solid var(--border)', background: 'white', cursor: 'pointer', fontSize: 16 }}>👤</button>}
-          </div>
-        </div>
-
-        <div ref={msgsRef} style={{ flex: 1, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {(activeRoom.messages || []).map(msg => (
-            <div key={msg.id} style={{ maxWidth: '68%', alignSelf: msg.senderId === user?.id ? 'flex-end' : 'flex-start' }}>
-              <div style={{ padding: '10px 14px', borderRadius: 16, fontSize: 14, lineHeight: 1.45, ...(msg.senderId === user?.id ? { background: 'var(--green)', color: 'white', borderBottomRightRadius: 4 } : { background: 'white', border: '1.5px solid var(--border)', color: 'var(--ink)', borderBottomLeftRadius: 4 }) }}>
-                {msg.text}
+        {activeRoom ? (
+          <>
+            {/* Active Header */}
+            <div style={{ padding: '14px 20px', background: 'white', borderBottom: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                background: 'linear-gradient(135deg, var(--green), var(--green-light))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+                color: 'white', fontWeight: 700, overflow: 'hidden'
+              }}>
+                {activeRoom.workerAvatar && (activeRoom.workerAvatar.startsWith('http') || activeRoom.workerAvatar.startsWith('data:')) ? (
+                  <img src={activeRoom.workerAvatar} alt={activeRoom.workerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  activeRoom.workerAvatar || activeRoom.workerName.charAt(0).toUpperCase()
+                )}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4, textAlign: msg.senderId === user?.id ? 'right' : 'left' }}>{new Date(msg.sentAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{activeRoom.workerName}</div>
+                <div style={{ fontSize: 12, color: isTyping ? 'var(--amber)' : 'var(--ink-soft)', fontWeight: 500 }}>
+                  {isTyping ? 'Typing...' : activeRoom.jobTitle}
+                </div>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  title={activeRoom.otherUserPhone ? `Call or contact ${activeRoom.workerName}` : 'Phone number unavailable'}
+                  onClick={() => setIsContactOptionsOpen(true)}
+                  disabled={!activeRoom.otherUserPhone}
+                  style={{
+                    width: 36, height: 36, borderRadius: 8, border: '1.5px solid var(--border)',
+                    background: 'white', cursor: activeRoom.otherUserPhone ? 'pointer' : 'not-allowed',
+                    opacity: activeRoom.otherUserPhone ? 1 : 0.5, fontSize: 16
+                  }}
+                >
+                  📞
+                </button>
+                {activeRoom.otherUserRole === 'worker' && (
+                  <button
+                    type="button"
+                    title="Open worker profile"
+                    onClick={() => navigate(`/worker/${activeRoom.otherUserId}`)}
+                    style={{
+                      width: 36, height: 36, borderRadius: 8, border: '1.5px solid var(--border)',
+                      background: 'white', cursor: 'pointer', fontSize: 16
+                    }}
+                  >
+                    👤
+                  </button>
+                )}
+                {/* Delete entire chat */}
+                <button
+                  type="button"
+                  title="Delete conversation"
+                  onClick={() => setIsDeleteChatModalOpen(true)}
+                  style={{
+                    width: 36, height: 36, borderRadius: 8,
+                    border: '1.5px solid #fee2e2', background: '#fef2f2',
+                    color: '#dc2626', cursor: 'pointer', fontSize: 15,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
 
-        <div style={{ padding: '14px 20px', background: 'white', borderTop: '1.5px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <input type="text" value={input} onChange={e => handleInputChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()} placeholder="Type a message..." style={{ flex: 1, padding: '10px 16px', border: '1.5px solid var(--border)', borderRadius: 24, fontSize: 14, outline: 'none', fontFamily: 'inherit', background: 'var(--surface)' }} />
-          <button className="btn btn-primary" disabled={isSending || !input.trim()} style={{ borderRadius: '50%', width: 42, height: 42, padding: 0, justifyContent: 'center', opacity: isSending || !input.trim() ? 0.6 : 1 }} onClick={sendMessage}>{isSending ? '…' : '➤'}</button>
-        </div>
-        </> : <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24, color: 'var(--ink-soft)', textAlign: 'center' }}>{isLoading ? 'Loading conversation...' : 'Select a conversation to read and send messages.'}</div>}
+            {/* Messages Area */}
+            <div ref={msgsRef} style={{ flex: 1, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {(activeRoom.messages || []).length === 0 ? (
+                <div style={{ textAlign: 'center', margin: 'auto', color: 'var(--ink-soft)', fontSize: 14 }}>
+                  No messages yet. Send a message to start the conversation!
+                </div>
+              ) : (
+                (activeRoom.messages || []).map(msg => {
+                  const isMine = msg.senderId === user?.id;
+                  return (
+                    <div key={msg.id} style={{ maxWidth: '70%', alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
+                      <div style={{
+                        padding: '10px 14px', borderRadius: 16, fontSize: 14, lineHeight: 1.45,
+                        ...(isMine
+                          ? { background: 'var(--green)', color: 'white', borderBottomRightRadius: 4 }
+                          : { background: 'white', border: '1.5px solid var(--border)', color: 'var(--ink)', borderBottomLeftRadius: 4 })
+                      }}>
+                        {msg.text}
+                      </div>
+
+                      {/* Timestamp & Unsend button */}
+                      <div style={{
+                        fontSize: 11, color: 'var(--ink-soft)', marginTop: 4,
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        justifyContent: isMine ? 'flex-end' : 'flex-start'
+                      }}>
+                        <span>{new Date(msg.sentAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                        {isMine && (
+                          <button
+                            type="button"
+                            onClick={() => setUnsendConfirmId(unsendConfirmId === msg.id ? null : msg.id)}
+                            style={{
+                              background: 'transparent', border: 'none', padding: 0,
+                              color: '#9ca3af', cursor: 'pointer', fontSize: 11,
+                              transition: 'color 0.15s'
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.color = '#dc2626')}
+                            onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}
+                            title="Unsend message"
+                          >
+                            Unsend
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Unsend Confirmation Bar */}
+                      {unsendConfirmId === msg.id && (
+                        <div style={{
+                          marginTop: 6, padding: '6px 10px', borderRadius: 8,
+                          background: '#fef2f2', border: '1px solid #fee2e2',
+                          display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#b91c1c'
+                        }}>
+                          <span>Unsend this message?</span>
+                          <button
+                            type="button"
+                            onClick={() => handleUnsendMessage(msg.id)}
+                            disabled={isUnsending}
+                            style={{
+                              background: '#dc2626', color: 'white', border: 'none',
+                              borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700
+                            }}
+                          >
+                            {isUnsending ? '...' : 'Yes, unsend'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setUnsendConfirmId(null)}
+                            style={{
+                              background: 'transparent', color: '#6b7280', border: 'none',
+                              cursor: 'pointer', fontSize: 11
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Message Input */}
+            <div style={{ padding: '14px 20px', background: 'white', borderTop: '1.5px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={input}
+                onChange={e => handleInputChange(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                placeholder="Type a message..."
+                style={{
+                  flex: 1, padding: '10px 16px', border: '1.5px solid var(--border)',
+                  borderRadius: 24, fontSize: 14, outline: 'none', fontFamily: 'inherit',
+                  background: 'var(--surface)'
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                disabled={isSending || !input.trim()}
+                style={{
+                  borderRadius: '50%', width: 42, height: 42, padding: 0,
+                  justifyContent: 'center', opacity: isSending || !input.trim() ? 0.6 : 1
+                }}
+                onClick={sendMessage}
+              >
+                {isSending ? '…' : '➤'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24, color: 'var(--ink-soft)', textAlign: 'center' }}>
+            {isLoading ? 'Loading conversations...' : 'Select a conversation to read and send messages.'}
+          </div>
+        )}
+
+        {/* Contact Options Dialog */}
         {isContactOptionsOpen && activeRoom && (
-          <div onClick={() => setIsContactOptionsOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(15, 23, 18, 0.38)', display: 'grid', placeItems: 'center', padding: 20 }}>
-            <section role="dialog" aria-modal="true" aria-labelledby="contact-dialog-title" onClick={event => event.stopPropagation()} style={{ width: 'min(100%, 380px)', padding: 24, borderRadius: 12, background: 'white', boxShadow: '0 18px 50px rgba(0,0,0,0.2)' }}>
+          <div
+            onClick={() => setIsContactOptionsOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 200,
+              background: 'rgba(15, 23, 18, 0.38)',
+              display: 'grid', placeItems: 'center', padding: 20
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="contact-dialog-title"
+              onClick={event => event.stopPropagation()}
+              style={{
+                width: 'min(100%, 380px)', padding: 24, borderRadius: 12,
+                background: 'white', boxShadow: '0 18px 50px rgba(0,0,0,0.2)'
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 18 }}>
                 <div>
-                  <h2 id="contact-dialog-title" style={{ margin: 0, fontSize: 18, color: 'var(--ink)' }}>Contact {activeRoom.workerName}</h2>
-                  <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-soft)' }}>Choose how you want to reach them.</p>
+                  <h2 id="contact-dialog-title" style={{ margin: 0, fontSize: 18, color: 'var(--ink)' }}>
+                    Contact {activeRoom.workerName}
+                  </h2>
+                  <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-soft)' }}>
+                    Choose how you want to reach them.
+                  </p>
                 </div>
-                <button type="button" aria-label="Close contact options" onClick={() => setIsContactOptionsOpen(false)} style={{ border: 0, background: 'transparent', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 22, lineHeight: 1 }}>×</button>
+                <button
+                  type="button"
+                  aria-label="Close contact options"
+                  onClick={() => setIsContactOptionsOpen(false)}
+                  style={{ border: 0, background: 'transparent', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 22, lineHeight: 1 }}
+                >
+                  ×
+                </button>
               </div>
-              <div style={{ padding: '12px 14px', marginBottom: 14, border: '1px solid var(--border)', borderRadius: 8, color: 'var(--ink)', fontSize: 16, userSelect: 'text' }}>{phoneNumber}</div>
+              <div style={{ padding: '12px 14px', marginBottom: 14, border: '1px solid var(--border)', borderRadius: 8, color: 'var(--ink)', fontSize: 16, userSelect: 'text' }}>
+                {phoneNumber}
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <a href={`tel:${telephoneLink}`} onClick={() => setIsContactOptionsOpen(false)} className="btn btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }}>📞 Call</a>
-                <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noreferrer" onClick={() => setIsContactOptionsOpen(false)} className="btn btn-ghost" style={{ justifyContent: 'center', textDecoration: 'none' }}>WhatsApp</a>
-                <button type="button" className="btn btn-ghost" onClick={copyPhoneNumber} style={{ gridColumn: '1 / -1' }}>Copy phone number</button>
+                <a href={`tel:${telephoneLink}`} onClick={() => setIsContactOptionsOpen(false)} className="btn btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }}>
+                  📞 Call
+                </a>
+                <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noreferrer" onClick={() => setIsContactOptionsOpen(false)} className="btn btn-ghost" style={{ justifyContent: 'center', textDecoration: 'none' }}>
+                  WhatsApp
+                </a>
+                <button type="button" className="btn btn-ghost" onClick={copyPhoneNumber} style={{ gridColumn: '1 / -1' }}>
+                  Copy phone number
+                </button>
               </div>
-              <p style={{ margin: '14px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-soft)' }}>Calling uses the phone or calling app configured on your device.</p>
+              <p style={{ margin: '14px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-soft)' }}>
+                Calling uses the phone or calling app configured on your device.
+              </p>
+            </section>
+          </div>
+        )}
+
+        {/* Delete Chat Confirmation Dialog */}
+        {isDeleteChatModalOpen && activeRoom && (
+          <div
+            onClick={() => setIsDeleteChatModalOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 200,
+              background: 'rgba(15, 23, 18, 0.45)',
+              display: 'grid', placeItems: 'center', padding: 20
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: 'min(100%, 390px)', padding: 24, borderRadius: 12,
+                background: 'white', boxShadow: '0 18px 50px rgba(0,0,0,0.2)'
+              }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 8, textAlign: 'center' }}>🗑️</div>
+              <h2 style={{ margin: '0 0 8px', fontSize: 18, color: 'var(--ink)', textAlign: 'center' }}>
+                Delete Conversation?
+              </h2>
+              <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--ink-soft)', textAlign: 'center', lineHeight: 1.5 }}>
+                Are you sure you want to delete this chat with <strong>{activeRoom.workerName}</strong>? All messages in this conversation will be permanently deleted.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setIsDeleteChatModalOpen(false)}
+                  disabled={isDeletingChat}
+                  style={{ justifyContent: 'center' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleDeleteChat}
+                  disabled={isDeletingChat}
+                  style={{
+                    background: '#dc2626', color: 'white', border: 'none',
+                    justifyContent: 'center', fontWeight: 700
+                  }}
+                >
+                  {isDeletingChat ? 'Deleting...' : 'Delete Chat'}
+                </button>
+              </div>
             </section>
           </div>
         )}

@@ -80,11 +80,13 @@ export const proposalsAPI = {
 export const chatAPI = {
   getRooms: () => apiClient.get('/chat/rooms'),
   startRoom: (data: { targetUserId: string; jobId?: string }) => apiClient.post('/chat/rooms', data),
+  deleteRoom: (roomId: string) => apiClient.delete(`/chat/rooms/${roomId}`),
 
   getMessages: (roomId: string) => apiClient.get(`/chat/messages/${roomId}`),
-
   sendMessage: (roomId: string, text: string) =>
     apiClient.post('/chat/messages', { roomId, text }),
+  unsendMessage: (messageId: string) =>
+    apiClient.delete(`/chat/messages/${messageId}`),
 };
 
 // ─── REVIEWS ──────────────────────────────────────

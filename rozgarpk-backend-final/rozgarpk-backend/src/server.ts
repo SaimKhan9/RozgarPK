@@ -112,6 +112,48 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Unsend a message via socket
+  socket.on('unsend_message', async (data: { messageId: string }) => {
+    try {
+      const msg = await query(
+        'SELECT id, room_id FROM messages WHERE id = $1 AND sender_id = $2',
+        [data.messageId, user.userId]
+      );
+      if (!msg.rows[0]) {
+        socket.emit('error', { message: 'Message not found or you cannot unsend this message' });
+        return;
+      }
+      const roomId = msg.rows[0].room_id;
+      await query('DELETE FROM messages WHERE id = $1', [data.messageId]);
+      io.to(roomId).emit('message_deleted', { messageId: data.messageId, roomId });
+    } catch (err) {
+      console.error('Socket unsend error:', err);
+      socket.emit('error', { message: 'Failed to unsend message' });
+    }
+  });
+
+  // Delete an entire chat room via socket
+  socket.on('delete_room', async (data: { roomId: string }) => {
+    try {
+      const room = await query(
+        'SELECT id, client_id, worker_id FROM chat_rooms WHERE id = $1 AND (client_id = $2 OR worker_id = $2)',
+        [data.roomId, user.userId]
+      );
+      if (!room.rows[0]) {
+        socket.emit('error', { message: 'Room not found or unauthorized' });
+        return;
+      }
+      const { client_id, worker_id } = room.rows[0];
+      await query('DELETE FROM chat_rooms WHERE id = $1', [data.roomId]);
+      io.to(data.roomId).emit('chat_deleted', { roomId: data.roomId });
+      io.to(`user:${client_id}`).emit('chat_deleted', { roomId: data.roomId });
+      io.to(`user:${worker_id}`).emit('chat_deleted', { roomId: data.roomId });
+    } catch (err) {
+      console.error('Socket delete room error:', err);
+      socket.emit('error', { message: 'Failed to delete room' });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`❌ Socket disconnected: ${user.userId}`);
   });
